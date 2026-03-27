@@ -17,6 +17,7 @@ const statusColors: Record<EmployerStatus, string> = {
 export default async function AdminEmployersPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+  if (session.user.role !== "ADMIN") redirect("/login");
 
   const employers = await prisma.employer.findMany({
     orderBy: { createdAt: "desc" },

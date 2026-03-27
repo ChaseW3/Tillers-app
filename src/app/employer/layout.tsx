@@ -10,6 +10,7 @@ export default async function EmployerLayout({
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+  if (session.user.role !== "EMPLOYER") redirect("/login");
 
   return (
     <div className="min-h-screen bg-gray-50">

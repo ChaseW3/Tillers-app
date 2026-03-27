@@ -20,8 +20,9 @@ const shiftStatusColors: Record<string, string> = {
 export default async function EmployerDashboard() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+  if (session.user.role !== "EMPLOYER") redirect("/login");
 
-  const userId = (session.user as typeof session.user & { id: string }).id;
+  const userId = session.user.id;
 
   const employer = await prisma.employer.findUnique({
     where: { userId },
