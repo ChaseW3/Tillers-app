@@ -16,6 +16,9 @@ export default async function EmployerProfilePage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  const role = (session.user as typeof session.user & { role: string }).role;
+  if (role !== "EMPLOYER") redirect("/admin");
+
   const userId = (session.user as typeof session.user & { id: string }).id;
 
   const employer = await prisma.employer.findUnique({
