@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const updateEmployerSchema = z.object({
@@ -67,11 +68,19 @@ export async function PATCH(
     return NextResponse.json({ error: result.error.flatten() }, { status: 400 });
   }
 
-  const employer = await prisma.employer.update({
-    where: { id },
-    data: result.data,
-    include: { user: { select: { email: true } } },
-  });
+  let employer;
+  try {
+    employer = await prisma.employer.update({
+      where: { id },
+      data: result.data,
+      include: { user: { select: { email: true } } },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    throw e;
+  }
 
   return NextResponse.json(employer);
 }
