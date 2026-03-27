@@ -86,24 +86,28 @@ export async function POST(req: NextRequest) {
 
   const loginUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/login`;
 
-  await resend.emails.send({
-    from: "Tillers Staffing <noreply@tillers.nl>",
-    to: email,
-    subject: "Your Tillers Staffing account is ready",
-    text: [
-      "Welcome to Tillers Staffing!",
-      "",
-      "Your employer account has been created. Use the details below to sign in:",
-      "",
-      `Login page: ${loginUrl}`,
-      `Email:      ${email}`,
-      `Password:   ${password}`,
-      "",
-      "Please change your password after your first login.",
-      "",
-      "Tillers Staffing",
-    ].join("\n"),
-  });
+  try {
+    await resend.emails.send({
+      from: "Tillers Staffing <noreply@tillers.nl>",
+      to: email,
+      subject: "Your Tillers Staffing account is ready",
+      text: [
+        "Welcome to Tillers Staffing!",
+        "",
+        "Your employer account has been created. Use the details below to sign in:",
+        "",
+        `Login page: ${loginUrl}`,
+        `Email:      ${email}`,
+        `Password:   ${password}`,
+        "",
+        "Please change your password after your first login.",
+        "",
+        "Tillers Staffing",
+      ].join("\n"),
+    });
+  } catch {
+    // Email delivery failure should not block account creation
+  }
 
   return NextResponse.json(employer, { status: 201 });
 }
