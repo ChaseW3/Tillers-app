@@ -38,7 +38,14 @@ export async function GET() {
 
   const employers = await prisma.employer.findMany({
     orderBy: { createdAt: "desc" },
-    include: {
+    select: {
+      id: true,
+      companyName: true,
+      contactFirst: true,
+      contactLast: true,
+      status: true,
+      markupRate: true,
+      createdAt: true,
       user: { select: { email: true } },
     },
   });
