@@ -37,8 +37,9 @@ function EditField({
 }) {
   return (
     <div>
-      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <label htmlFor={name} className="block text-xs text-gray-500 mb-1">{label}</label>
       <input
+        id={name}
         name={name}
         type={type}
         step={step}
@@ -79,31 +80,46 @@ export function EmployerDetail({ employer: initial }: { employer: EmployerWithEm
       notes: (data.get("notes") as string) || null,
     };
 
-    const res = await fetch(`/api/admin/employers/${employer.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch(`/api/admin/employers/${employer.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    if (!res.ok) {
-      const json = await res.json();
-      setError(
-        typeof json.error === "string" ? json.error : "Something went wrong"
-      );
+      if (!res.ok) {
+        const json = await res.json();
+        setError(
+          typeof json.error === "string" ? json.error : "Something went wrong"
+        );
+        return;
+      }
+
+      const updated = await res.json();
+      setEmployer({
+        id: updated.id,
+        companyName: updated.companyName,
+        kvkNumber: updated.kvkNumber,
+        vatNumber: updated.vatNumber,
+        billingAddress: updated.billingAddress,
+        city: updated.city,
+        postalCode: updated.postalCode,
+        contactFirst: updated.contactFirst,
+        contactLast: updated.contactLast,
+        phone: updated.phone,
+        markupRate: updated.markupRate.toString(),
+        paymentTermDays: updated.paymentTermDays,
+        notes: updated.notes,
+        status: updated.status,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+        user: updated.user,
+      });
+      setEditing(false);
+      router.refresh();
+    } finally {
       setSaving(false);
-      return;
     }
-
-    const updated = await res.json();
-    setEmployer({
-      ...updated,
-      markupRate: updated.markupRate.toString(),
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    });
-    setEditing(false);
-    setSaving(false);
-    router.refresh();
   }
 
   async function handleStatusToggle() {
@@ -111,18 +127,24 @@ export function EmployerDetail({ employer: initial }: { employer: EmployerWithEm
     const newStatus: EmployerStatus =
       employer.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
 
-    const res = await fetch(`/api/admin/employers/${employer.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
+    try {
+      const res = await fetch(`/api/admin/employers/${employer.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-    if (res.ok) {
+      if (!res.ok) {
+        setError("Failed to update status");
+        return;
+      }
+
       const updated = await res.json();
       setEmployer((prev) => ({ ...prev, status: updated.status }));
       router.refresh();
+    } finally {
+      setToggling(false);
     }
-    setToggling(false);
   }
 
   return (
@@ -230,8 +252,9 @@ export function EmployerDetail({ employer: initial }: { employer: EmployerWithEm
                 defaultValue={employer.paymentTermDays}
               />
               <div className="md:col-span-2">
-                <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                <label htmlFor="notes" className="block text-xs text-gray-500 mb-1">Notes</label>
                 <textarea
+                  id="notes"
                   name="notes"
                   rows={3}
                   defaultValue={employer.notes ?? ""}
