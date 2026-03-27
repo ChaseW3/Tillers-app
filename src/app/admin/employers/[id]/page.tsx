@@ -1,6 +1,8 @@
 // src/app/admin/employers/[id]/page.tsx
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { EmployerDetail } from "@/components/admin/employer-detail";
 import type { EmployerWithEmail } from "@/types/employer";
@@ -11,6 +13,9 @@ export default async function AdminEmployerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
 
   const raw = await prisma.employer.findUnique({
     where: { id },
