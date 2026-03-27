@@ -1,5 +1,8 @@
 // src/app/admin/employers/page.tsx
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { format } from "date-fns";
 import type { EmployerStatus } from "@prisma/client";
@@ -12,6 +15,9 @@ const statusColors: Record<EmployerStatus, string> = {
 };
 
 export default async function AdminEmployersPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+
   const employers = await prisma.employer.findMany({
     orderBy: { createdAt: "desc" },
     include: {
