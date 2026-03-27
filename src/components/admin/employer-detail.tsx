@@ -117,12 +117,15 @@ export function EmployerDetail({ employer: initial }: { employer: EmployerWithEm
       });
       setEditing(false);
       router.refresh();
+    } catch (err) {
+      setError("Network error — please try again");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleStatusToggle() {
+    setError("");
     setToggling(true);
     const newStatus: EmployerStatus =
       employer.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
@@ -142,6 +145,8 @@ export function EmployerDetail({ employer: initial }: { employer: EmployerWithEm
       const updated = await res.json();
       setEmployer((prev) => ({ ...prev, status: updated.status }));
       router.refresh();
+    } catch (err) {
+      setError("Network error — please try again");
     } finally {
       setToggling(false);
     }
