@@ -24,9 +24,8 @@ const updateEmployerSchema = z.object({
     .optional(),
 });
 
-function adminOnly(session: Awaited<ReturnType<typeof getServerSession>>) {
-  const role = (session?.user as typeof session.user & { role?: string })?.role;
-  return session && role === "ADMIN";
+function adminOnly(session: Awaited<ReturnType<typeof getServerSession<typeof authOptions>>>) {
+  return session?.user?.role === "ADMIN";
 }
 
 export async function GET(

@@ -6,13 +6,12 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  const role = (session?.user as typeof session.user & { role?: string })?.role;
 
-  if (!session || role !== "EMPLOYER") {
+  if (!session || session.user?.role !== "EMPLOYER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const userId = (session.user as typeof session.user & { id: string }).id;
+  const userId = session.user.id;
 
   const employer = await prisma.employer.findUnique({
     where: { userId },
