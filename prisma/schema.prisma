@@ -1,0 +1,402 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  EMPLOYER
+  STUDENT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role      @default(STUDENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  student  Student?
+  employer Employer?
+}
+
+// ─── Students ────────────────────────────────────────────────────────────────
+
+enum StudentStatus {
+  INVITED
+  PROFILE_COMPLETE
+  ACTIVE
+  INACTIVE
+}
+
+model Student {
+  id                  String        @id @default(cuid())
+  userId              String        @unique
+  firstName           String
+  lastName            String
+  dateOfBirth         DateTime
+  phone               String
+  address             String
+  city                String
+  postalCode          String
+  nationality         String        @default("NL")
+  bsnEncrypted        String        // AES-256 encrypted — never expose to non-admins
+  iban                String
+  ibanHolderName      String
+  university          String?
+  studentNumber       String?
+  studyProgram        String?
+  graduationYear      Int?
+  loonheffingskorting Boolean       @default(false)
+  emergencyName       String
+  emergencyPhone      String
+  hourlyRate          Decimal       @db.Decimal(10, 2)
+  status              StudentStatus @default(INVITED)
+  nmbrsEmployeeId     String?       // set after Nmbrs sync
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+  shifts    Shift[]
+  payslips  Payslip[]
+  documents Document[]
+
+  @@index([status])
+}
+
+// ─── Employers ───────────────────────────────────────────────────────────────
+
+enum EmployerStatus {
+  INVITED
+  PENDING_SIGNATURE
+  ACTIVE
+  INACTIVE
+}
+
+model Employer {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  companyName     String
+  kvkNumber       String
+  vatNumber       String
+  billingAddress  String
+  city            String
+  postalCode      String
+  contactFirst    String
+  contactLast     String
+  phone           String
+  markupRate      Decimal        @db.Decimal(5, 2)   // e.g. 35.00 = 35%
+  paymentTermDays Int            @default(14)
+  notes           String?
+  status          EmployerStatus @default(INVITED)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs      Job[]
+  contracts Contract[]
+  documents Document[]
+  invoices  Invoice[]
+}
+
+// ─── Contracts ───────────────────────────────────────────────────────────────
+
+enum ContractPhase {
+  FASE_A
+  FASE_B
+  FASE_C
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  ACTIVE
+  ENDED
+  SUPERSEDED
+}
+
+model Contract {
+  id            String         @id @default(cuid())
+  studentId     String
+  employerId    String
+  phase         ContractPhase  @default(FASE_A)
+  status        ContractStatus @default(DRAFT)
+  startDate     DateTime
+  endDate       DateTime?      // null = open-ended (Fase A with uitzendbeding)
+  hourlyRate    Decimal        @db.Decimal(10, 2)   // rate snapshot at signing
+  workedWeeks   Int            @default(0)           // recalculated on each shift approval
+  blobUrl       String?        // PDF in Vercel Blob
+  signedAt      DateTime?
+  signatureIp   String?
+  signatureMeta String?        @db.Text              // JSON: user agent, screen, etc.
+  alertsSent    Json           @default("[]")        // tracks which week alerts have fired
+  signingToken  String?        @unique               // one-time JWT for signing link
+  signingTokenExpiresAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  employer Employer @relation(fields: [employerId], references: [id])
+
+  @@index([studentId])
+  @@index([employerId])
+  @@index([status])
+}
+
+// ─── Jobs ────────────────────────────────────────────────────────────────────
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Job {
+  id             String    @id @default(cuid())
+  employerId     String
+  title          String
+  description    String?
+  location       String    // human-readable address
+  locationLat    Decimal?  @db.Decimal(10, 7)
+  locationLng    Decimal?  @db.Decimal(10, 7)
+  startDate      DateTime
+  endDate        DateTime
+  studentsNeeded Int       @default(1)
+  tags           String[]
+  dresscode      String?
+  internalNotes  String?
+  status         JobStatus @default(DRAFT)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  shifts   Shift[]
+
+  @@index([employerId])
+  @@index([status])
+}
+
+// ─── Shifts ──────────────────────────────────────────────────────────────────
+
+enum ShiftStatus {
+  PENDING_ACCEPTANCE
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  NO_SHOW
+  CANCELLED
+}
+
+model Shift {
+  id                   String      @id @default(cuid())
+  jobId                String
+  studentId            String
+  date                 DateTime    // date only (time 00:00 UTC)
+  scheduledStart       DateTime
+  scheduledEnd         DateTime
+  breakMinutes         Int         @default(0)
+  studentRateSnapshot  Decimal     @db.Decimal(10, 2)  // hourly rate at shift creation
+  billingRateSnapshot  Decimal     @db.Decimal(10, 2)  // employer billing rate at shift creation
+  status               ShiftStatus @default(PENDING_ACCEPTANCE)
+  notes                String?
+  declineReason        String?
+  acceptedAt           DateTime?
+  reminderSent         Boolean     @default(false)
+
+  // Clock-in
+  clockInTime          DateTime?
+  clockInLat           Decimal?    @db.Decimal(10, 7)
+  clockInLng           Decimal?    @db.Decimal(10, 7)
+  clockInDistanceM     Int?        // distance from job location in meters
+
+  // Clock-out
+  clockOutTime         DateTime?
+  clockOutLat          Decimal?    @db.Decimal(10, 7)
+  clockOutLng          Decimal?    @db.Decimal(10, 7)
+
+  // Manual override
+  manualOverride       Boolean     @default(false)
+  overrideNote         String?
+  overrideById         String?
+
+  // Approval (admin only)
+  adminApprovedAt      DateTime?
+  adminApprovedById    String?
+
+  // No-show
+  noShowAlertSent      Boolean     @default(false)
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([studentId])
+  @@index([status])
+  @@index([date])
+}
+
+// ─── Payroll ─────────────────────────────────────────────────────────────────
+
+enum PayslipStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model Payslip {
+  id          String        @id @default(cuid())
+  studentId   String
+  periodStart DateTime
+  periodEnd   DateTime
+  totalHours  Decimal       @db.Decimal(10, 2)
+  hourlyRate  Decimal       @db.Decimal(10, 2)
+  grossAmount Decimal       @db.Decimal(10, 2)
+  vakantiegeld Decimal      @db.Decimal(10, 2)  // 8.33% of gross
+  deductions  Decimal       @db.Decimal(10, 2)  @default(0)
+  netAmount   Decimal       @db.Decimal(10, 2)
+  status      PayslipStatus @default(DRAFT)
+  paidAt      DateTime?
+  nmbrsId     String?       // Nmbrs payslip reference (future sync)
+  blobUrl     String?       // PDF from Nmbrs stored in Vercel Blob
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+// ─── Invoices (future) ───────────────────────────────────────────────────────
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  employerId    String
+  invoiceNumber String        @unique  // e.g. "2026-001"
+  periodStart   DateTime
+  periodEnd     DateTime
+  subtotal      Decimal       @db.Decimal(10, 2)
+  vatRate       Decimal       @db.Decimal(5, 2)   @default(21)
+  vatAmount     Decimal       @db.Decimal(10, 2)
+  total         Decimal       @db.Decimal(10, 2)
+  status        InvoiceStatus @default(DRAFT)
+  dueDate       DateTime
+  paidAt        DateTime?
+  notes         String?
+  blobUrl       String?       // PDF in Vercel Blob
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@index([employerId])
+}
+
+// ─── Documents ───────────────────────────────────────────────────────────────
+
+enum DocumentType {
+  CONTRACT_FASE_A
+  CONTRACT_FASE_B
+  CONTRACT_FASE_C
+  SERVICE_AGREEMENT
+  PAYSLIP
+  ID_DOCUMENT
+  OTHER
+}
+
+model Document {
+  id            String       @id @default(cuid())
+  type          DocumentType
+  blobUrl       String
+  fileName      String
+  fileSize      Int?
+  contractId    String?
+  employerId    String?
+  studentId     String?
+  signedAt      DateTime?
+  signatureIp   String?
+  signatureMeta String?
+  createdAt     DateTime     @default(now())
+
+  student  Student?  @relation(fields: [studentId], references: [id])
+  employer Employer? @relation(fields: [employerId], references: [id])
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+model NotificationLog {
+  id      String   @id @default(cuid())
+  userId  String
+  type    String
+  channel String   // "email" | "whatsapp"
+  status  String   // "sent" | "failed"
+  error   String?
+  sentAt  DateTime @default(now())
+
+  @@index([userId])
+}
