@@ -22,13 +22,14 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
         {label}
         {!required && (
           <span className="ml-1 text-xs text-gray-400">(optional)</span>
         )}
       </label>
       <input
+        id={name}
         name={name}
         type={type}
         required={required}
@@ -70,23 +71,28 @@ export function NewEmployerForm() {
       notes: (data.get("notes") as string) || undefined,
     };
 
-    const res = await fetch("/api/admin/employers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch("/api/admin/employers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    if (!res.ok) {
-      const json = await res.json();
-      setError(
-        typeof json.error === "string" ? json.error : "Something went wrong"
-      );
+      if (!res.ok) {
+        const json = await res.json();
+        setError(
+          typeof json.error === "string" ? json.error : "Something went wrong"
+        );
+        setLoading(false);
+        return;
+      }
+
+      const employer = await res.json();
+      router.push(`/admin/employers/${employer.id}`);
+    } catch {
+      setError("Network error — please try again.");
       setLoading(false);
-      return;
     }
-
-    const employer = await res.json();
-    router.push(`/admin/employers/${employer.id}`);
   }
 
   return (
@@ -154,10 +160,11 @@ export function NewEmployerForm() {
             defaultValue={14}
           />
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
               Notes <span className="text-xs text-gray-400">(optional)</span>
             </label>
             <textarea
+              id="notes"
               name="notes"
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
